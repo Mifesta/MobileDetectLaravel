@@ -26,6 +26,9 @@
   "require": {
     "mobiledetect/mobiledetectlib": "2.8.*"
   },
+  "provide": {
+    "laravel/laravel": "5.*"
+  },
   "autoload": {
     "psr-4": {
       "MifestaClientBrowserData\\": "src/"

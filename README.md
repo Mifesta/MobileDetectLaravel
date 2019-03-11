@@ -1,1 +1,1 @@
-# MobileDetectLaravel
+# ClientBrowserData
