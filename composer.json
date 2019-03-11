@@ -1,6 +1,6 @@
 {
   "name": "mifesta/mobiledetect-laravel",
-  "version": "1.1",
+  "version": "1.2",
   "type": "library",
   "description": "Mobile_Detect is a lightweight PHP class for detecting mobile devices. It uses the User-Agent string combined with specific HTTP headers to detect the mobile environment.",
   "keywords": [
@@ -25,9 +25,6 @@
   },
   "require": {
     "mobiledetect/mobiledetectlib": "2.8.*"
-  },
-  "provide": {
-    "laravel/laravel": "5.6.*"
   },
   "autoload": {
     "psr-4": {
