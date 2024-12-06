@@ -80,7 +80,7 @@ abstract class ClientBrowserData
     /**
      * @var \Detection\MobileDetect
      */
-    private static MobileDetect $_mobile_detect_class;
+    private static $_mobile_detect_class;
     /**
      * Magic method __callStatic for ClientBrowserData
      * @param string $name
