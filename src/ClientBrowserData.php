@@ -2,158 +2,304 @@
 
 namespace MifestaClientBrowserData;
 
-use Detection\MobileDetect;
-use Exception;
-
 /**
- * @method static array getHttpHeaders()
- * @method static array getHttpHeader(string $header)
- * @method static array getMobileHeaders()
- * @method static array getUaHttpHeaders()
- * @method static boolean setCfHeaders(array|null $cfHeaders = null)
- * @method static array getCfHeaders()
- * @method static string|null getUserAgent()
- * @method static string|null setDetectionType($type = null)
- * @method static string|null getMatchingRegex()
- * @method static array|null getMatchesArray()
- * @method static array getMobileDetectionRulesExtended()
- * @method static array getRules()
- * @method static array checkHttpHeadersForMobile()
- * @method static boolean isTablet()
- * @method static boolean match(string $regex)
- * @method static float prepareVersionNo(string $ver)
- * @method static string|float version(string $propertyName, string|null $type = null)
- * @method static string mobileGrade()
- * @method static string getScriptVersion()
- * @method static array getPhoneDevices()
- * @method static array getTabletDevices()
- * @method static array getUserAgents()
- * @method static array getBrowsers()
- * @method static array getUtilities()
- * @method static array getMobileDetectionRules()
- * @method static array getOperatingSystems()
- * @method static array getProperties()
- * @see \Detection\MobileDetect
+ * Laravel entry point for mifesta/mobiledetect.
+ *
+ * The current Illuminate request supplies the HTTP headers. Outside a booted
+ * request the call falls through to $_SERVER, which is what
+ * MifestaBrowserData\BrowserData reads on its own.
+ *
+ * A manual setUserAgent() or setHttpHeaders() stays in effect until the next
+ * HTTP request or queued job. MobileDetectServiceProvider drops that cache
+ * after the response and before each job.
  */
-abstract class ClientBrowserData
+class ClientBrowserData
 {
     /**
-     * Public methods from \Detection\MobileDetect
-     * @var array
+     * md5 of the headers taken from the request that last synced $_SERVER.
+     *
+     * @var string|null
      */
-    private static array $valid_functions = [
-        'getHttpHeaders',
-        'getHttpHeader',
-        'getMobileHeaders',
-        'getUaHttpHeaders',
-        'setCfHeaders',
-        'getCfHeaders',
-        'getUserAgent',
-        'setDetectionType',
-        'getMatchingRegex',
-        'getMatchesArray',
-        'getMobileDetectionRulesExtended',
-        'getRules',
-        'checkHttpHeadersForMobile',
-        'isTablet',
-        'match',
-        'prepareVersionNo',
-        'version',
-        'mobileGrade',
-    ];
+    private static $requestFingerprint;
 
     /**
-     * Public static methods from \Detection\MobileDetect
-     * @var array
+     * Application set by the service provider. Null until Laravel boots the provider.
+     *
+     * @var object|null
      */
-    private static array $valid_static_functions = [
-        'getScriptVersion',
-        'getPhoneDevices',
-        'getTabletDevices',
-        'getUserAgents',
-        'getBrowsers',
-        'getUtilities',
-        'getMobileDetectionRules',
-        'getOperatingSystems',
-        'getProperties',
-    ];
+    private static $container;
+
     /**
-     * @var \Detection\MobileDetect
-     */
-    private static $_mobile_detect_class;
-    /**
-     * Magic method __callStatic for ClientBrowserData
      * @param string $name
      * @param array $arguments
      * @return mixed
-     * @throws \Exception
      */
-    public static function __callStatic(string $name, array $arguments)
+    public static function __callStatic($name, $arguments)
     {
-        if (in_array($name, self::$valid_functions)) {
-            return call_user_func_array([self::getMobileDetect(), $name], $arguments);
-        } elseif (in_array($name, self::$valid_static_functions)) {
-            return call_user_func_array([MobileDetect::class, $name], $arguments);
-        } else {
-            throw new Exception('Call to undefined methods '.__CLASS__.'::'.$name.'()');
-        }
+        return self::forward($name, $arguments);
     }
 
     /**
-     * Check if the device is mobile.
-     * Returns true if any type of mobile device detected, including special ones
+     * Facade and container calls arrive here.
+     *
+     * @param string $name
+     * @param array $arguments
+     * @return mixed
+     */
+    public function __call($name, $arguments)
+    {
+        return self::forward($name, $arguments);
+    }
+
+    /**
      * @return bool
      */
-    public static function isMobile(): bool
+    public static function isMobile()
     {
-        return self::getMobileDetect()->is('MobileBot') || self::getMobileDetect()->isMobile();
+        return self::forward('isMobile', array());
     }
 
     /**
-     * This method checks for a 'Bot' property in the userAgent.
      * @return bool
      */
-    public static function isAnyBot(): bool
+    public static function isTablet()
     {
-        $classMobileDetect = self::getMobileDetect();
-        return !($user_agent = $classMobileDetect->getUserAgent() ?? '') || preg_match('#(bot|spider|yeti|ichiro)#i', $user_agent) || $classMobileDetect->is('MobileBot') || $classMobileDetect->is('Bot');
+        return self::forward('isTablet', array());
     }
 
     /**
-     * This method checks for a 'Bot' property in the userAgent.
-     * Does not include mobile bots.
      * @return bool
      */
-    public static function isBot(): bool
+    public static function isBot()
     {
-        $classMobileDetect = self::getMobileDetect();
-        return !($user_agent = $classMobileDetect->getUserAgent()) || $classMobileDetect->is('Bot') || preg_match('#(yeti|ichiro)#i', $user_agent) || (preg_match('#(bot|spider)#i', $user_agent) && ! $classMobileDetect->is('MobileBot'));
+        return self::forward('isBot', array());
     }
 
     /**
-     * This method checks for a certain property in the userAgent.
+     * @return bool
+     */
+    public static function isAnyBot()
+    {
+        return self::forward('isAnyBot', array());
+    }
+
+    /**
      * @param string $key
      * @return bool
      */
-    public static function is(string $key): bool
+    public static function is($key)
     {
-        return match ($key) {
-            'Bot' => self::isBot(),
-            'Mobile' => self::isMobile(),
-            'AnyBot' => self::isAnyBot(),
-            default => self::getMobileDetect()->is($key),
-        };
+        return self::forward('is', array($key));
     }
 
     /**
-     * Get class \Detection\MobileDetect
-     * @return \Detection\MobileDetect
+     * @param string $regex
+     * @param string|null $userAgent
+     * @return bool
      */
-    private static function getMobileDetect(): MobileDetect
+    public static function match($regex, $userAgent = null)
     {
-        if (! self::$_mobile_detect_class) {
-            self::$_mobile_detect_class = new MobileDetect($_SERVER, request()->header('User-Agent'));
+        return self::forward('match', array($regex, $userAgent));
+    }
+
+    /**
+     * @param string $propertyName
+     * @param string|null $type
+     * @return string|float|false
+     */
+    public static function version($propertyName, $type = null)
+    {
+        if (func_num_args() < 2) {
+            return self::forward('version', array($propertyName));
         }
-        return self::$_mobile_detect_class;
+
+        return self::forward('version', array($propertyName, $type));
+    }
+
+    /**
+     * @param string|null $userAgent
+     * @return string
+     */
+    public static function setUserAgent($userAgent)
+    {
+        return self::forward('setUserAgent', array($userAgent));
+    }
+
+    /**
+     * @param array|null $httpHeaders
+     * @return void
+     */
+    public static function setHttpHeaders($httpHeaders = null)
+    {
+        self::forward('setHttpHeaders', array($httpHeaders));
+    }
+
+    /**
+     * @param object|null $container
+     * @return void
+     */
+    public static function useContainer($container)
+    {
+        self::$container = is_object($container) ? $container : null;
+        self::$requestFingerprint = null;
+    }
+
+    /**
+     * The next call reads the current request again.
+     * Used after the HTTP response and before a queued job.
+     *
+     * @return void
+     */
+    public static function forgetRequest()
+    {
+        self::$requestFingerprint = null;
+        if (class_exists('MifestaBrowserData\\BrowserData', false) || class_exists('MifestaBrowserData\\BrowserData', true)) {
+            \MifestaBrowserData\BrowserData::setHttpHeaders(null);
+        }
+    }
+
+    /**
+     * @param string $name
+     * @param array $arguments
+     * @return mixed
+     */
+    private static function forward($name, array $arguments)
+    {
+        self::applyRequest();
+
+        return call_user_func_array(array('\\MifestaBrowserData\\BrowserData', $name), $arguments);
+    }
+
+    /**
+     * @return void
+     */
+    private static function applyRequest()
+    {
+        $request = self::currentRequest();
+        if ($request === null) {
+            return;
+        }
+
+        $headers = self::headersFromRequest($request);
+        $fingerprint = md5(serialize($headers));
+        if (self::$requestFingerprint === $fingerprint) {
+            return;
+        }
+
+        if (self::headersFromServer() !== $headers) {
+            \MifestaBrowserData\BrowserData::setHttpHeaders($headers);
+        }
+
+        self::$requestFingerprint = $fingerprint;
+    }
+
+    /**
+     * @return object|null
+     */
+    private static function currentRequest()
+    {
+        $request = self::requestFrom(self::$container);
+        if ($request !== null) {
+            return $request;
+        }
+
+        if (!function_exists('app')) {
+            return null;
+        }
+
+        try {
+            return self::requestFrom(app());
+        } catch (\Exception $exception) {
+            return null;
+        }
+    }
+
+    /**
+     * @param object|null $app
+     * @return object|null
+     */
+    private static function requestFrom($app)
+    {
+        if (!is_object($app) || !method_exists($app, 'bound') || !$app->bound('request')) {
+            return null;
+        }
+
+        try {
+            $request = $app->make('request');
+        } catch (\Exception $exception) {
+            return null;
+        }
+
+        return is_object($request) ? $request : null;
+    }
+
+    /**
+     * @param object $request
+     * @return array<string, string>
+     */
+    private static function headersFromRequest($request)
+    {
+        $headers = array();
+
+        if (isset($request->server) && is_object($request->server) && method_exists($request->server, 'all')) {
+            foreach ($request->server->all() as $key => $value) {
+                if (is_string($key) && strncasecmp($key, 'HTTP_', 5) === 0) {
+                    $key = strtoupper($key);
+                }
+                self::keepHeader($headers, $key, $value);
+            }
+        }
+
+        if (isset($request->headers) && is_object($request->headers) && method_exists($request->headers, 'all')) {
+            foreach ($request->headers->all() as $name => $values) {
+                if (!is_string($name) || $name === '') {
+                    continue;
+                }
+                $lower = strtolower($name);
+                if ($lower === 'content-type' || $lower === 'content-length' || $lower === 'content-md5') {
+                    continue;
+                }
+                $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+                $value = is_array($values) ? reset($values) : $values;
+                self::keepHeader($headers, $key, $value);
+            }
+        }
+
+        ksort($headers);
+
+        return $headers;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function headersFromServer()
+    {
+        $headers = array();
+        foreach ($_SERVER as $key => $value) {
+            if (is_string($key) && strncasecmp($key, 'HTTP_', 5) === 0) {
+                self::keepHeader($headers, strtoupper($key), $value);
+            }
+        }
+        ksort($headers);
+
+        return $headers;
+    }
+
+    /**
+     * @param array<string, string> $headers
+     * @param mixed $key
+     * @param mixed $value
+     * @return void
+     */
+    private static function keepHeader(array &$headers, $key, $value)
+    {
+        if (!is_string($key) || !is_scalar($value)) {
+            return;
+        }
+        if (!preg_match('/^HTTP_[A-Z0-9_]+$/', $key)) {
+            return;
+        }
+        $headers[$key] = (string) $value;
     }
 }
